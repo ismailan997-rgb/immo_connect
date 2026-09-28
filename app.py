@@ -1,0 +1,367 @@
+import os
+import math
+import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """Calcule la distance en kilomètres entre deux coordonnées GPS."""
+    if None in (lat1, lon1, lat2, lon2):
+        return None
+    R = 6371.0  # Rayon moyen de la Terre en kilomètres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = (math.sin(delta_phi / 2.0) ** 2 +
+         math.cos(phi1) * math.cos(phi2) *
+         math.sin(delta_lambda / 2.0) ** 2)
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return R * c
+
+def format_distance(dist_km):
+    """Formate la distance de manière conviviale (mètres ou kilomètres)."""
+    if dist_km is None:
+        return None
+    if dist_km < 1.0:
+        return f"{int(round(dist_km * 1000))} m"
+    return f"{dist_km:.1f} km"
+
+app = Flask(__name__)
+app.secret_key = "immo_connect_cle_secrete_dakar_2026"
+
+# Configuration du dossier pour stocker les photos des logements
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# Création des tables de la base de données
+def init_db():
+    conn = get_db_connection()
+    
+    # Table des utilisateurs
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agency_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            phone TEXT NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+
+    # Table des biens (avec lat et lng)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS properties (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            price INTEGER NOT NULL,
+            property_type TEXT NOT NULL,
+            offer_type TEXT NOT NULL,
+            city TEXT NOT NULL,
+            neighborhood TEXT NOT NULL,
+            latitude REAL,
+            longitude REAL,
+            bedrooms INTEGER DEFAULT 0,
+            bathrooms INTEGER DEFAULT 0,
+            image TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Migration des colonnes latitude/longitude si la table existait déjà sans ces colonnes
+    columns = [row['name'] for row in conn.execute("PRAGMA table_info(properties)").fetchall()]
+    if 'latitude' not in columns:
+        conn.execute("ALTER TABLE properties ADD COLUMN latitude REAL")
+    if 'longitude' not in columns:
+        conn.execute("ALTER TABLE properties ADD COLUMN longitude REAL")
+    
+    # Table des avis et notes
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            property_id INTEGER NOT NULL,
+            author_name TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (property_id) REFERENCES properties (id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# 2. Route pour soumettre un avis
+@app.route("/property/<int:property_id>/review", methods=["POST"])
+def add_review(property_id):
+    author_name = request.form.get("author_name")
+    rating = request.form.get("rating")
+    comment = request.form.get("comment")
+
+    if not author_name or not rating or not comment:
+        flash("Veuillez remplir tous les champs de l'avis.", "danger")
+        return redirect(url_for("property_detail", property_id=property_id))
+
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO reviews (property_id, author_name, rating, comment) VALUES (?, ?, ?, ?)",
+        (property_id, author_name, int(rating), comment)
+    )
+    conn.commit()
+    conn.close()
+
+    flash("Votre avis a bien été publié !", "success")
+    return redirect(url_for("property_detail", property_id=property_id))
+
+# 3. Mettre à jour la route property_detail pour récupérer les avis
+@app.route("/property/<int:property_id>")
+def property_detail(property_id):
+    conn = get_db_connection()
+    
+    property_item = conn.execute("""
+        SELECT properties.*, users.phone, users.agency_name, users.email
+        FROM properties 
+        JOIN users ON properties.user_id = users.id 
+        WHERE properties.id = ?
+    """, (property_id,)).fetchone()
+
+    # Récupération des avis
+    reviews = conn.execute("""
+        SELECT * FROM reviews WHERE property_id = ? ORDER BY created_at DESC
+    """, (property_id,)).fetchall()
+    
+    # Calcul de la moyenne des notes
+    avg_rating = conn.execute("""
+        SELECT AVG(rating) as avg FROM reviews WHERE property_id = ?
+    """, (property_id,)).fetchone()["avg"]
+
+    conn.close()
+
+    if property_item is None:
+        flash("Annonce introuvable.", "danger")
+        return redirect(url_for("home"))
+
+    return render_template("property_detail.html", item=property_item, reviews=reviews, avg_rating=avg_rating)
+
+# --- ROUTES ---
+
+@app.route("/")
+def home():
+    property_type = request.args.get("property_type", "").strip()
+    offer_type = request.args.get("offer_type", "").strip()
+    neighborhood = request.args.get("neighborhood", "").strip().lower()
+    max_price = request.args.get("max_price", "").strip()
+    user_lat = request.args.get("user_lat", type=float)
+    user_lng = request.args.get("user_lng", type=float)
+    user_loc_name = request.args.get("user_loc_name", "").strip()
+
+    conn = get_db_connection()
+    query = """
+        SELECT properties.*, users.phone, users.agency_name 
+        FROM properties 
+        JOIN users ON properties.user_id = users.id 
+        WHERE 1=1
+    """
+    params = []
+
+    if property_type:
+        query += " AND properties.property_type = ?"
+        params.append(property_type)
+    if offer_type:
+        query += " AND properties.offer_type = ?"
+        params.append(offer_type)
+    if neighborhood:
+        query += " AND (LOWER(properties.neighborhood) LIKE ? OR LOWER(properties.city) LIKE ?)"
+        params.append(f"%{neighborhood}%", f"%{neighborhood}%")
+    if max_price:
+        try:
+            query += " AND properties.price <= ?"
+            params.append(float(max_price))
+        except ValueError:
+            pass
+
+    query += " ORDER BY properties.id DESC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    # Enrichissement avec la distance pour chaque bien
+    properties = []
+    is_geolocated = user_lat is not None and user_lng is not None
+
+    for row in rows:
+        item = dict(row)
+        item_lat = item.get("latitude")
+        item_lng = item.get("longitude")
+        if is_geolocated and item_lat is not None and item_lng is not None:
+            dist = haversine_distance(user_lat, user_lng, item_lat, item_lng)
+            item["distance_km"] = dist
+            item["distance_text"] = format_distance(dist)
+        else:
+            item["distance_km"] = None
+            item["distance_text"] = None
+        properties.append(item)
+
+    # Si géolocalisation active : trier par proximité (les biens les plus proches en premier)
+    if is_geolocated:
+        properties.sort(
+            key=lambda p: (
+                p["distance_km"] is None,
+                p["distance_km"] if p["distance_km"] is not None else float("inf")
+            )
+        )
+
+    return render_template(
+        "index.html",
+        properties=properties,
+        user_lat=user_lat,
+        user_lng=user_lng,
+        user_loc_name=user_loc_name,
+        is_geolocated=is_geolocated
+    )
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        agency_name = request.form["agency_name"].strip()
+        email = request.form["email"].strip().lower()
+        phone = request.form["phone"].strip()
+        password = request.form["password"]
+
+        hashed_pw = generate_password_hash(password)
+
+        conn = get_db_connection()
+        try:
+            conn.execute("INSERT INTO users (agency_name, email, phone, password) VALUES (?, ?, ?, ?)",
+                         (agency_name, email, phone, hashed_pw))
+            conn.commit()
+            flash("Compte Agent créé avec succès ! Connectez-vous.", "success")
+            return redirect(url_for("login"))
+        except sqlite3.IntegrityError:
+            flash("Cet e-mail est déjà utilisé.", "danger")
+        finally:
+            conn.close()
+
+    return render_template("register.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form["email"].strip().lower()
+        password = request.form["password"]
+
+        conn = get_db_connection()
+        user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        conn.close()
+
+        if user and check_password_hash(user["password"], password):
+            session["user_id"] = user["id"]
+            session["agency_name"] = user["agency_name"]
+            flash(f"Bienvenue, {user['agency_name']} !", "success")
+            return redirect(url_for("dashboard"))
+        else:
+            flash("Identifiants incorrects.", "danger")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Vous êtes déconnecté.", "info")
+    return redirect(url_for("home"))
+
+@app.route("/dashboard")
+def dashboard():
+    if "user_id" not in session:
+        flash("Veuillez vous connecter pour gérer vos annonces.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    my_properties = conn.execute(
+        "SELECT * FROM properties WHERE user_id = ? ORDER BY id DESC", 
+        (session["user_id"],)
+    ).fetchall()
+    conn.close()
+
+    return render_template("dashboard.html", properties=my_properties)
+
+@app.route("/add-property", methods=["GET", "POST"])
+def add_property():
+    if "user_id" not in session:
+        flash("Connexion requise pour publier un bien.", "warning")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        title = request.form["title"].strip()
+        property_type = request.form["property_type"]
+        offer_type = request.form["offer_type"]
+        city = request.form["city"].strip()
+        neighborhood = request.form["neighborhood"].strip()
+        price = request.form["price"]
+        bedrooms = request.form.get("bedrooms", 0)
+        bathrooms = request.form.get("bathrooms", 0)
+        description = request.form["description"].strip()
+
+        file = request.files.get("image")
+        image_filename = "default_house.jpg"
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            saved_filename = f"{session['user_id']}_{filename}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+            image_filename = saved_filename
+
+        latitude = request.form.get("latitude")
+        longitude = request.form.get("longitude")
+        try:
+            latitude = float(latitude) if latitude and latitude.strip() else None
+            longitude = float(longitude) if longitude and longitude.strip() else None
+        except (ValueError, TypeError):
+            latitude = None
+            longitude = None
+
+        conn = get_db_connection()
+        conn.execute('''
+            INSERT INTO properties 
+            (user_id, title, property_type, offer_type, city, neighborhood, price, bedrooms, bathrooms, description, image, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (session["user_id"], title, property_type, offer_type, city, neighborhood, price, bedrooms, bathrooms, description, image_filename, latitude, longitude))
+        conn.commit()
+        conn.close()
+
+        flash("Annonce immobilière publiée !", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("add_property.html")
+
+@app.route("/delete-property/<int:property_id>")
+def delete_property(property_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    conn.execute("DELETE FROM properties WHERE id = ? AND user_id = ?", (property_id, session["user_id"]))
+    conn.commit()
+    conn.close()
+
+    flash("Annonce supprimée avec succès.", "info")
+    return redirect(url_for("dashboard"))
+if __name__ == "__main__":
+    # Écoute sur 0.0.0.0 pour être accessible sur votre PC et vos appareils connectés au Wi-Fi
+    app.run(host="0.0.0.0", port=5000, debug=True)

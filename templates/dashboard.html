@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+    .card-img { height: 160px; width: 100%; object-fit: cover; }
+    .card-body { padding: 15px; }
+    .btn-danger { display: block; text-align: center; background: #ef4444; color: #fff; padding: 8px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 12px; }
+</style>
+
+<div class="header-actions">
+    <h2>Tableau de bord — {{ session.get('agency_name') }} 📊</h2>
+    <a href="/add-property" class="btn-primary">+ Publier une nouvelle annonce</a>
+</div>
+
+<h3>Vos annonces publiées</h3>
+<br>
+
+<div class="grid">
+    {% for item in properties %}
+    <div class="card">
+        <img src="{{ url_for('static', filename='uploads/' + item.image) }}" class="card-img" alt="{{ item.title }}">
+        <div class="card-body">
+            <h4>{{ item.title }}</h4>
+            <p style="color: #38bdf8; font-weight: bold; margin: 5px 0;">{{ "{:,}".format(item.price) }} FCFA</p>
+            <p style="color: #94a3b8; font-size: 0.85rem;">📍 {{ item.neighborhood }} ({{ item.city }})</p>
+            
+            <a href="/delete-property/{{ item.id }}" class="btn-danger" onclick="return confirm('Voulez-vous vraiment supprimer cette annonce ?');">
+                Supprimer 🗑️
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <p style="color: #94a3b8;">Vous n'avez publié aucune annonce pour le moment.</p>
+    {% endfor %}
+</div>
+{% endblock %}

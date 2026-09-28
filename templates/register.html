@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .form-card { max-width: 450px; margin: 40px auto; background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: #cbd5e1; }
+    .form-group input { width: 100%; padding: 11px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; }
+</style>
+
+<div class="form-card">
+    <h2 style="margin-bottom: 20px; text-align: center;">Inscription Agent / Propriétaire 🔑</h2>
+
+    <form action="/register" method="POST">
+        <div class="form-group">
+            <label>Nom de l'agence ou de l'agent</label>
+            <input type="text" name="agency_name" placeholder="Ex: Dakar Immo Express" required>
+        </div>
+
+        <div class="form-group">
+            <label>Numéro WhatsApp (avec indicatif ex: 221770000000)</label>
+            <input type="text" name="phone" placeholder="Ex: 221770000000" required>
+        </div>
+
+        <div class="form-group">
+            <label>Adresse E-mail</label>
+            <input type="email" name="email" placeholder="exemple@email.com" required>
+        </div>
+
+        <div class="form-group">
+            <label>Mot de passe</label>
+            <input type="password" name="password" placeholder="••••••••" required>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 10px; cursor: pointer;">Créer mon compte ✨</button>
+    </form>
+    
+    <p style="text-align: center; margin-top: 15px; font-size: 0.9rem; color: #94a3b8;">
+        Déjà un compte ? <a href="/login" style="color: #38bdf8;">Se connecter</a>
+    </p>
+</div>
+{% endblock %}

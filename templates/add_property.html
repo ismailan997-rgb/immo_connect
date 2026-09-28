@@ -1,0 +1,516 @@
+{% extends 'base.html' %}
+
+{% block title %}Publier une annonce — Immo Connect{% endblock %}
+
+{% block content %}
+<!-- Leaflet CSS & JS pour la sélection d'emplacement -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    .form-container {
+        max-width: 780px;
+        margin: 20px auto;
+        background: #1e293b;
+        padding: 35px;
+        border-radius: 12px;
+        border: 1px solid #334155;
+    }
+
+    .form-header {
+        margin-bottom: 25px;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 15px;
+    }
+
+    .form-header h2 {
+        font-size: 1.6rem;
+        color: #f8fafc;
+        margin-bottom: 5px;
+    }
+
+    .form-header p {
+        color: #94a3b8;
+        font-size: 0.95rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #cbd5e1;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #38bdf8;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 120px;
+    }
+
+    /* Style Géolocalisation Précise */
+    .geo-box {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 20px;
+    }
+
+    .geo-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .geo-tools {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .btn-geo {
+        background: #0284c7;
+        color: #fff;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn-geo:hover {
+        background: #38bdf8;
+        color: #0f172a;
+    }
+
+    .search-street-box {
+        display: flex;
+        gap: 8px;
+    }
+
+    .search-street-box input {
+        flex: 1;
+        padding: 10px 12px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.9rem;
+    }
+
+    .btn-search-street {
+        background: #334155;
+        color: #38bdf8;
+        border: 1px solid #475569;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-search-street:hover {
+        background: #38bdf8;
+        color: #0f172a;
+    }
+
+    .geo-status {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-top: 8px;
+    }
+
+    .geo-status.active {
+        color: #38bdf8;
+        font-weight: 600;
+    }
+
+    #geo-map {
+        height: 280px;
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        margin-top: 12px;
+        z-index: 1;
+    }
+
+    .map-tip {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 15px;
+        margin-top: 25px;
+        border-top: 1px solid #334155;
+        padding-top: 20px;
+    }
+
+    .btn-cancel {
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 0.95rem;
+        padding: 10px 18px;
+        transition: color 0.2s;
+    }
+
+    .btn-cancel:hover {
+        color: #f8fafc;
+    }
+
+    .btn-submit {
+        background: #0284c7;
+        color: #fff;
+        padding: 12px 24px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-submit:hover {
+        background: #0369a1;
+    }
+
+    @media (max-width: 640px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        .form-container {
+            padding: 20px;
+        }
+        .geo-tools {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="form-container">
+    <div class="form-header">
+        <h2>Publier une annonce immobilière 🏡</h2>
+        <p>Renseignez les détails du bien à mettre en location ou en vente.</p>
+    </div>
+
+    <form action="/add-property" method="POST" enctype="multipart/form-data">
+        <div class="form-grid">
+            <div class="form-group full-width">
+                <label for="title">Titre de l'annonce *</label>
+                <input type="text" id="title" name="title" placeholder="Ex: Bel appartement 3 pièces vue mer" required>
+            </div>
+
+            <div class="form-group">
+                <label for="offer_type">Type d'offre *</label>
+                <select id="offer_type" name="offer_type" required>
+                    <option value="Location">Location</option>
+                    <option value="Vente">Vente</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="property_type">Type de bien *</label>
+                <select id="property_type" name="property_type" required>
+                    <option value="Appartement">Appartement</option>
+                    <option value="Studio">Studio / Chambre</option>
+                    <option value="Villa">Villa / Maison</option>
+                    <option value="Terrain">Terrain</option>
+                    <option value="Bureau">Bureau / Commerce</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="city">Ville *</label>
+                <input type="text" id="city" name="city" placeholder="Ex: Dakar" value="Dakar" required>
+            </div>
+
+            <div class="form-group">
+                <label for="neighborhood">Quartier *</label>
+                <input type="text" id="neighborhood" name="neighborhood" placeholder="Ex: Almadies, Mermoz..." required>
+            </div>
+
+            <!-- 🗺️ Section Géolocalisation précise -->
+            <div class="form-group full-width">
+                <label><i class="fa-solid fa-map-location-dot" style="color: #38bdf8;"></i> Emplacement géographique précis</label>
+                <div class="geo-box">
+                    <div class="geo-header">
+                        <div>
+                            <strong style="color: #f8fafc; font-size: 0.95rem;">Positionnement précis du logement</strong>
+                            <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 3px;">
+                                Choisissez une méthode rapide pour placer le repère exactement sur le bien.
+                            </p>
+                        </div>
+                        <button type="button" id="btn-detect-gps" class="btn-geo">
+                            <i class="fa-solid fa-crosshairs"></i> Détecter mon GPS
+                        </button>
+                    </div>
+
+                    <!-- Outils de précision rapide -->
+                    <div class="geo-tools">
+                        <div>
+                            <select id="select-dakar-neighborhood" style="padding: 10px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #fff; width: 100%; font-size: 0.9rem;">
+                                <option value="">-- Centrer sur un quartier de Dakar --</option>
+                                <option value="14.7442,-17.5175,Almadies">Arrondissement des Almadies</option>
+                                <option value="14.7550,-17.5150,Ngor">Ngor / Virage</option>
+                                <option value="14.7230,-17.4890,Ouakam">Ouakam / Mamelles</option>
+                                <option value="14.7074,-17.4744,Mermoz">Mermoz</option>
+                                <option value="14.7140,-17.4670,Sacré-Cœur">Sacré-Cœur 1, 2, 3</option>
+                                <option value="14.7220,-17.4560,Liberté 6">Liberté 6 / Sicap</option>
+                                <option value="14.6930,-17.4660,Point E">Fann / Point E</option>
+                                <option value="14.6710,-17.4330,Plateau">Dakar Plateau (Centre-ville)</option>
+                                <option value="14.6850,-17.4470,Médina">Médina / Gueule Tapée</option>
+                                <option value="14.7570,-17.4670,Yoff">Yoff / Aéro-ville</option>
+                                <option value="14.7630,-17.4370,Parcelles Assainies">Parcelles Assainies</option>
+                                <option value="14.7350,-17.4480,Grand Yoff">Grand Yoff / HLM</option>
+                                <option value="14.7290,-17.4310,Hann Maristes">Hann Maristes</option>
+                                <option value="14.7550,-17.3950,Pikine">Pikine</option>
+                                <option value="14.7780,-17.3870,Guédiawaye">Guédiawaye</option>
+                                <option value="14.7820,-17.3110,Keur Massar">Keur Massar</option>
+                                <option value="14.7150,-17.2720,Rufisque">Rufisque</option>
+                                <option value="14.7270,-17.1850,Diamniadio">Diamniadio</option>
+                                <option value="14.4420,-16.9850,Saly">Saly / Somone</option>
+                            </select>
+                        </div>
+                        <div class="search-street-box">
+                            <input type="text" id="street-search-input" placeholder="Rue ou repère (ex: Sea Plaza, VDN...)">
+                            <button type="button" id="btn-search-street" class="btn-search-street">
+                                <i class="fa-solid fa-search"></i> Pointeur
+                            </button>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="latitude" name="latitude" value="">
+                    <input type="hidden" id="longitude" name="longitude" value="">
+
+                    <div id="geo-status" class="geo-status">
+                        <i class="fa-solid fa-circle-info"></i> Aucune coordonnée GPS définie. Pointez sur la carte ou choisissez un quartier.
+                    </div>
+
+                    <div id="geo-map"></div>
+                    <div class="map-tip">
+                        <i class="fa-solid fa-hand-pointer"></i> Astuce : Vous pouvez faire glisser le repère bleu ou cliquer n'importe où sur la carte pour affiner au mètre près.
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group full-width">
+                <label for="price">Prix (FCFA) *</label>
+                <input type="number" id="price" name="price" placeholder="Ex: 350000" min="0" required>
+            </div>
+
+            <div class="form-group">
+                <label for="bedrooms">Nombre de chambres</label>
+                <input type="number" id="bedrooms" name="bedrooms" placeholder="Ex: 3" min="0">
+            </div>
+
+            <div class="form-group">
+                <label for="bathrooms">Nombre de salles de bain</label>
+                <input type="number" id="bathrooms" name="bathrooms" placeholder="Ex: 2" min="0">
+            </div>
+
+            <div class="form-group full-width">
+                <label for="image">Photo principale du bien</label>
+                <input type="file" id="image" name="image" accept="image/*">
+            </div>
+
+            <div class="form-group full-width">
+                <label for="description">Description détaillée</label>
+                <textarea id="description" name="description" placeholder="Décrivez les atouts du bien, commodités, charges incluses, etc."></textarea>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="/dashboard" class="btn-cancel">Annuler</a>
+            <button type="submit" class="btn-submit">Publier l'annonce ✨</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Initialisation de la carte Leaflet (centre Dakar par défaut)
+    var defaultLat = 14.7167;
+    var defaultLng = -17.4677;
+    var marker = null;
+
+    var geoMap = L.map('geo-map').setView([defaultLat, defaultLng], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(geoMap);
+
+    function updateCoordinates(lat, lng, label) {
+        document.getElementById('latitude').value = lat.toFixed(6);
+        document.getElementById('longitude').value = lng.toFixed(6);
+
+        var statusEl = document.getElementById('geo-status');
+        var text = '📍 Emplacement défini : ' + lat.toFixed(5) + ', ' + lng.toFixed(5);
+        if (label) {
+            text += ' (' + label + ')';
+        }
+        statusEl.className = 'geo-status active';
+        statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + text;
+
+        if (!marker) {
+            marker = L.marker([lat, lng], { draggable: true }).addTo(geoMap);
+            marker.on('dragend', function(e) {
+                var pos = e.target.getLatLng();
+                updateCoordinates(pos.lat, pos.lng, 'Ajusté manuellement');
+            });
+        } else {
+            marker.setLatLng([lat, lng]);
+        }
+    }
+
+    // Clic direct sur la carte
+    geoMap.on('click', function(e) {
+        updateCoordinates(e.latlng.lat, e.latlng.lng, 'Positionné au clic');
+    });
+
+    // Sélection rapide d'un quartier de Dakar
+    document.getElementById('select-dakar-neighborhood').addEventListener('change', function() {
+        var val = this.value;
+        if (!val) return;
+        var parts = val.split(',');
+        var lat = parseFloat(parts[0]);
+        var lng = parseFloat(parts[1]);
+        var name = parts[2];
+
+        // Remplir aussi automatiquement le champ quartier si vide
+        var neighborhoodInput = document.getElementById('neighborhood');
+        if (neighborhoodInput && !neighborhoodInput.value) {
+            neighborhoodInput.value = name;
+        }
+
+        geoMap.setView([lat, lng], 15);
+        updateCoordinates(lat, lng, 'Quartier : ' + name);
+    });
+
+    // Recherche de rue ou repère avec Nominatim (OpenStreetMap)
+    document.getElementById('btn-search-street').addEventListener('click', searchAddress);
+    document.getElementById('street-search-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchAddress();
+        }
+    });
+
+    function searchAddress() {
+        var input = document.getElementById('street-search-input');
+        var query = input.value.trim();
+        if (!query) return;
+
+        var btn = document.getElementById('btn-search-street');
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query + ' Dakar Senegal') + '&limit=1';
+
+        fetch(url, { headers: { 'Accept-Language': 'fr' } })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                btn.innerHTML = '<i class="fa-solid fa-search"></i> Pointeur';
+                if (data && data.length > 0) {
+                    var lat = parseFloat(data[0].lat);
+                    var lng = parseFloat(data[0].lon);
+                    geoMap.setView([lat, lng], 16);
+                    updateCoordinates(lat, lng, query);
+                } else {
+                    alert("Aucun résultat trouvé pour : " + query + ". Vous pouvez cliquer directement sur la carte pour pointer le bien.");
+                }
+            })
+            .catch(function(err) {
+                btn.innerHTML = '<i class="fa-solid fa-search"></i> Pointeur';
+                alert("Erreur de recherche. Veuillez pointer manuellement sur la carte.");
+            });
+    }
+
+    // Détection GPS mobile / navigateur
+    document.getElementById('btn-detect-gps').addEventListener('click', function() {
+        var btn = this;
+        var statusEl = document.getElementById('geo-status');
+
+        if (!navigator.geolocation) {
+            alert("La géolocalisation n'est pas supportée par votre navigateur.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Détection...';
+
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> GPS détecté';
+                var lat = pos.coords.latitude;
+                var lng = pos.coords.longitude;
+                var acc = pos.coords.accuracy ? 'précision ~' + Math.round(pos.coords.accuracy) + 'm' : '';
+
+                geoMap.setView([lat, lng], 16);
+                updateCoordinates(lat, lng, 'GPS ' + acc);
+            },
+            function(err) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> Réessayer GPS';
+                var msg = "Impossible d'obtenir la position.";
+                if (err.code === 1) msg = "Accès à la position refusé.";
+                alert(msg + " Vous pouvez utiliser le sélecteur de quartier ou cliquer directement sur la carte.");
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    });
+</script>
+{% endblock %}

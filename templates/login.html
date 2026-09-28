@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .form-card { max-width: 420px; margin: 40px auto; background: #1e293b; padding: 30px; border-radius: 12px; border: 1px solid #334155; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; color: #cbd5e1; }
+    .form-group input { width: 100%; padding: 11px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; }
+</style>
+
+<div class="form-card">
+    <h2 style="margin-bottom: 20px; text-align: center;">Connexion Espace Agent 🔐</h2>
+
+    <form action="/login" method="POST">
+        <div class="form-group">
+            <label>Adresse E-mail</label>
+            <input type="email" name="email" placeholder="exemple@email.com" required>
+        </div>
+
+        <div class="form-group">
+            <label>Mot de passe</label>
+            <input type="password" name="password" placeholder="••••••••" required>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 10px; cursor: pointer;">Se connecter 🚀</button>
+    </form>
+
+    <p style="text-align: center; margin-top: 15px; font-size: 0.9rem; color: #94a3b8;">
+        Pas encore de compte ? <a href="/register" style="color: #38bdf8;">S'inscrire</a>
+    </p>
+</div>
+{% endblock %}
