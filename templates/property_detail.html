@@ -43,7 +43,7 @@
 
 <div class="detail-card">
     <div class="detail-img-container">
-        <img src="{{ url_for('static', filename='uploads/' + item.image) }}" class="detail-img" alt="{{ item.title }}">
+        <img src="{{ image_url(item.image) }}" class="detail-img" alt="{{ item.title }}">
     </div>
 
     <div class="detail-body">
