@@ -12,6 +12,7 @@
     <h2 style="margin-bottom: 20px; text-align: center;">Inscription Agent / Propriétaire 🔑</h2>
 
     <form action="/register" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label>Nom de l'agence ou de l'agent</label>
             <input type="text" name="agency_name" placeholder="Ex: Dakar Immo Express" required>

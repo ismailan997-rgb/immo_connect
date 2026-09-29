@@ -102,6 +102,7 @@
         <div class="review-form">
             <h4 style="margin-bottom: 12px; color: #38bdf8;">Laisser un avis ou une question</h4>
             <form action="/property/{{ item.id }}/review" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label>Votre nom / Pseudo</label>
                     <input type="text" name="author_name" placeholder="Ex: Mamadou D." required>
@@ -151,8 +152,15 @@
     }).addTo(map);
 
     // Ajout du marqueur sur le quartier
+    var popup = document.createElement('div');
+    var popupTitle = document.createElement('strong');
+    popupTitle.textContent = {{ item.title|tojson }};
+    popup.appendChild(popupTitle);
+    popup.appendChild(document.createElement('br'));
+    popup.append('📍 ' + {{ item.neighborhood|tojson }});
+
     L.marker([defaultLat, defaultLng]).addTo(map)
-        .bindPopup('<b>{{ item.title }}</b><br>📍 {{ item.neighborhood }}')
+        .bindPopup(popup)
         .openPopup();
 </script>
 {% endblock %}

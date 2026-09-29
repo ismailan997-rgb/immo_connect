@@ -12,6 +12,7 @@
     <h2 style="margin-bottom: 20px; text-align: center;">Connexion Espace Agent 🔐</h2>
 
     <form action="/login" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label>Adresse E-mail</label>
             <input type="email" name="email" placeholder="exemple@email.com" required>

@@ -660,23 +660,66 @@
                 iconAnchor: [10, 10]
             });
 
+            var userPopup = document.createElement('div');
+            var userPopupTitle = document.createElement('strong');
+            userPopupTitle.textContent = '📍 ' + (userLocName ? userLocName : 'Votre position');
+            userPopup.appendChild(userPopupTitle);
+            userPopup.appendChild(document.createElement('br'));
+            userPopup.append('Point de calcul des distances');
+
             userPinMarker = L.marker([userLat, userLng], { icon: userIcon }).addTo(leafletMap)
-                .bindPopup('<b>📍 ' + (userLocName ? userLocName : 'Votre position') + '</b><br>Point de calcul des distances')
+                .bindPopup(userPopup)
                 .openPopup();
         }
 
         // Marqueurs des biens immobiliers
         propertyMarkers.forEach(function(item) {
             var marker = L.marker([item.lat, item.lng]).addTo(leafletMap);
-            var popupContent = `
-                <div style="font-family: inherit; font-size: 0.9rem; min-width: 180px;">
-                    <strong style="color: #0f172a;">${item.title}</strong><br>
-                    <span style="color: #0284c7; font-weight: bold;">${item.price} FCFA</span><br>
-                    <span style="color: #64748b; font-size: 0.8rem;">📍 ${item.neighborhood} (${item.city})</span>
-                    ${item.distance ? '<br><span style="color:#10b981; font-weight:bold; font-size:0.8rem;">🚶 à ' + item.distance + '</span>' : ''}
-                    <br><a href="/property/${item.id}" style="display:inline-block; margin-top:6px; color:#0284c7; font-weight:bold; text-decoration:none;">Voir l'annonce &rarr;</a>
-                </div>
-            `;
+            var popupContent = document.createElement('div');
+            popupContent.style.fontFamily = 'inherit';
+            popupContent.style.fontSize = '0.9rem';
+            popupContent.style.minWidth = '180px';
+
+            var title = document.createElement('strong');
+            title.style.color = '#0f172a';
+            title.textContent = item.title;
+            popupContent.appendChild(title);
+            popupContent.appendChild(document.createElement('br'));
+
+            var price = document.createElement('span');
+            price.style.color = '#0284c7';
+            price.style.fontWeight = 'bold';
+            price.textContent = item.price + ' FCFA';
+            popupContent.appendChild(price);
+            popupContent.appendChild(document.createElement('br'));
+
+            var location = document.createElement('span');
+            location.style.color = '#64748b';
+            location.style.fontSize = '0.8rem';
+            location.textContent = '📍 ' + item.neighborhood + ' (' + item.city + ')';
+            popupContent.appendChild(location);
+
+            if (item.distance) {
+                popupContent.appendChild(document.createElement('br'));
+                var distance = document.createElement('span');
+                distance.style.color = '#10b981';
+                distance.style.fontWeight = 'bold';
+                distance.style.fontSize = '0.8rem';
+                distance.textContent = '🚶 à ' + item.distance;
+                popupContent.appendChild(distance);
+            }
+
+            popupContent.appendChild(document.createElement('br'));
+            var detailsLink = document.createElement('a');
+            detailsLink.href = '/property/' + encodeURIComponent(item.id);
+            detailsLink.style.display = 'inline-block';
+            detailsLink.style.marginTop = '6px';
+            detailsLink.style.color = '#0284c7';
+            detailsLink.style.fontWeight = 'bold';
+            detailsLink.style.textDecoration = 'none';
+            detailsLink.textContent = "Voir l'annonce →";
+            popupContent.appendChild(detailsLink);
+
             marker.bindPopup(popupContent);
         });
 

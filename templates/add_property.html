@@ -245,6 +245,7 @@
     </div>
 
     <form action="/add-property" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-grid">
             <div class="form-group full-width">
                 <label for="title">Titre de l'annonce *</label>

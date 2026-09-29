@@ -27,9 +27,10 @@
             <p style="color: #38bdf8; font-weight: bold; margin: 5px 0;">{{ "{:,}".format(item.price) }} FCFA</p>
             <p style="color: #94a3b8; font-size: 0.85rem;">📍 {{ item.neighborhood }} ({{ item.city }})</p>
             
-            <a href="/delete-property/{{ item.id }}" class="btn-danger" onclick="return confirm('Voulez-vous vraiment supprimer cette annonce ?');">
-                Supprimer 🗑️
-            </a>
+            <form action="/delete-property/{{ item.id }}" method="POST" onsubmit="return confirm('Voulez-vous vraiment supprimer cette annonce ?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-danger">Supprimer 🗑️</button>
+            </form>
         </div>
     </div>
     {% else %}
