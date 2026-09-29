@@ -1,0 +1,753 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Leaflet CSS & JS pour la carte des logements -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+    /* Bannières Hero */
+    .hero-section {
+        text-align: center;
+        padding: 40px 20px 30px;
+        background: radial-gradient(circle at center, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
+        margin-bottom: 25px;
+    }
+    .hero-title { font-size: 2.5rem; font-weight: 800; margin-bottom: 10px; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-subtitle { color: #94a3b8; font-size: 1.1rem; max-width: 620px; margin: 0 auto 20px; }
+
+    /* Bouton action rapide Hero */
+    .btn-hero-geo {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(135deg, #0284c7, #0284c7);
+        color: #fff;
+        padding: 12px 26px;
+        border-radius: 30px;
+        font-weight: 700;
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        cursor: pointer;
+        text-decoration: none;
+        box-shadow: 0 8px 20px rgba(2, 132, 199, 0.35);
+        transition: all 0.3s ease;
+    }
+    .btn-hero-geo:hover {
+        background: #38bdf8;
+        color: #0f172a;
+        transform: translateY(-2px);
+        box-shadow: 0 12px 25px rgba(56, 189, 248, 0.5);
+    }
+
+    /* Barre de recherche Glassmorphism */
+    .search-card { 
+        background: rgba(30, 41, 59, 0.7); 
+        backdrop-filter: blur(10px);
+        padding: 25px; 
+        border-radius: 16px; 
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        margin-bottom: 35px; 
+    }
+    .search-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end; }
+    .form-group label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px; font-weight: 600; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; color: #fff; font-size: 0.95rem; }
+    .btn-search { background: #38bdf8; color: #0f172a; border: none; padding: 13px; border-radius: 10px; font-weight: 800; cursor: pointer; width: 100%; transition: transform 0.2s, background 0.2s; }
+    .btn-search:hover { background: #7dd3fc; transform: scale(1.02); }
+
+    /* Bannière Mode Géolocalisation */
+    .geo-banner {
+        background: rgba(2, 132, 199, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        border-radius: 12px;
+        padding: 14px 20px;
+        margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .geo-banner-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #f8fafc;
+        font-size: 0.95rem;
+    }
+    .geo-banner-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .btn-change-geo {
+        background: #0284c7;
+        color: #fff;
+        border: none;
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    .btn-change-geo:hover {
+        background: #38bdf8;
+        color: #0f172a;
+    }
+    .btn-reset-geo {
+        background: #1e293b;
+        color: #94a3b8;
+        border: 1px solid #334155;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+    .btn-reset-geo:hover {
+        background: #ef4444;
+        color: #fff;
+        border-color: #ef4444;
+    }
+
+    /* Modal de Sélection de Position Précise */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(11, 19, 43, 0.8);
+        backdrop-filter: blur(6px);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    }
+    .modal-content {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 16px;
+        max-width: 680px;
+        width: 100%;
+        padding: 30px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+    }
+    .modal-header h3 {
+        font-size: 1.4rem;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .btn-close-modal {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.4rem;
+        cursor: pointer;
+    }
+    .btn-close-modal:hover { color: #fff; }
+
+    .location-option-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #38bdf8;
+        margin: 20px 0 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .dakar-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .dakar-chip {
+        background: #0f172a;
+        color: #cbd5e1;
+        border: 1px solid #334155;
+        padding: 8px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .dakar-chip:hover {
+        background: #0284c7;
+        color: #fff;
+        border-color: #38bdf8;
+        transform: translateY(-2px);
+    }
+    .modal-search-box {
+        display: flex;
+        gap: 10px;
+    }
+    .modal-search-box input {
+        flex: 1;
+        padding: 12px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 0.95rem;
+    }
+    .btn-modal-search {
+        background: #0284c7;
+        color: #fff;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .btn-modal-search:hover { background: #38bdf8; color: #0f172a; }
+
+    .btn-auto-gps {
+        width: 100%;
+        background: #0f172a;
+        border: 1px dashed #38bdf8;
+        color: #38bdf8;
+        padding: 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        transition: all 0.2s;
+    }
+    .btn-auto-gps:hover {
+        background: #1e293b;
+        border-style: solid;
+    }
+
+    /* Carte globale */
+    .map-toggle-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .btn-toggle-map {
+        background: #1e293b;
+        color: #38bdf8;
+        border: 1px solid #334155;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+    .btn-toggle-map:hover {
+        background: #0f172a;
+        border-color: #38bdf8;
+    }
+    #interactive-map-container {
+        display: none;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        overflow: hidden;
+        margin-bottom: 35px;
+        padding: 10px;
+    }
+    #interactive-map {
+        height: 400px;
+        width: 100%;
+        border-radius: 10px;
+    }
+    .map-hint {
+        font-size: 0.8rem;
+        color: #94a3b8;
+        padding: 8px 6px 2px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Grid des cartes */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 30px; }
+    
+    /* Animation Carte */
+    .card { 
+        background: #1e293b; 
+        border: 1px solid rgba(255, 255, 255, 0.08); 
+        border-radius: 16px; 
+        overflow: hidden; 
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+    }
+    .card:hover { 
+        transform: translateY(-8px); 
+        box-shadow: 0 20px 30px rgba(0, 0, 0, 0.4);
+        border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    /* Effet Zoom Image */
+    .img-box { position: relative; height: 220px; overflow: hidden; }
+    .card-img { height: 100%; width: 100%; object-fit: cover; transition: transform 0.5s ease; }
+    .card:hover .card-img { transform: scale(1.08); }
+
+    .card-body { padding: 22px; }
+    .price { font-size: 1.4rem; font-weight: 800; color: #38bdf8; margin: 10px 0; }
+    .badges { position: absolute; top: 15px; left: 15px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 2; }
+    .badge { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(5px); padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #fff; border: 1px solid rgba(255,255,255,0.1); }
+    .badge-offer { background: #0284c7; }
+    .badge-distance { background: #10b981; color: #fff; border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
+
+    .btn-detail { display: block; width: 100%; text-align: center; background: #0f172a; color: #38bdf8; padding: 12px; border-radius: 10px; font-weight: 700; text-decoration: none; margin-top: 15px; border: 1px solid #334155; transition: all 0.2s; }
+    .btn-detail:hover { background: #38bdf8; color: #0f172a; }
+</style>
+
+<div class="hero-section">
+    <h1 class="hero-title">Trouvez le logement idéal au Sénégal</h1>
+    <p class="hero-subtitle">Des centaines d'appartements, studios et villas géolocalisés avec précision.</p>
+    
+    <button type="button" id="btn-hero-locate" class="btn-hero-geo">
+        <i class="fa-solid fa-crosshairs"></i> Définir ma position / Logements autour de moi
+    </button>
+</div>
+
+<div class="search-card">
+    <form class="search-form" id="search-form" action="/" method="GET">
+        <input type="hidden" name="user_lat" id="search_user_lat" value="{{ user_lat if user_lat else '' }}">
+        <input type="hidden" name="user_lng" id="search_user_lng" value="{{ user_lng if user_lng else '' }}">
+        <input type="hidden" name="user_loc_name" id="search_user_loc_name" value="{{ user_loc_name if user_loc_name else '' }}">
+
+        <div class="form-group">
+            <label><i class="fa-solid fa-tag"></i> Type d'offre</label>
+            <select name="offer_type">
+                <option value="">Location & Vente</option>
+                <option value="Location" {% if request.args.get('offer_type') == 'Location' %}selected{% endif %}>Location</option>
+                <option value="Vente" {% if request.args.get('offer_type') == 'Vente' %}selected{% endif %}>Vente</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label><i class="fa-solid fa-building"></i> Type de bien</label>
+            <select name="property_type">
+                <option value="">Tous les biens</option>
+                <option value="Appartement" {% if request.args.get('property_type') == 'Appartement' %}selected{% endif %}>Appartement</option>
+                <option value="Studio" {% if request.args.get('property_type') == 'Studio' %}selected{% endif %}>Studio / Chambre</option>
+                <option value="Villa" {% if request.args.get('property_type') == 'Villa' %}selected{% endif %}>Villa / Maison</option>
+                <option value="Terrain" {% if request.args.get('property_type') == 'Terrain' %}selected{% endif %}>Terrain</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label><i class="fa-solid fa-location-dot"></i> Quartier / Ville</label>
+            <input type="text" name="neighborhood" value="{{ request.args.get('neighborhood', '') }}" placeholder="Ex: Almadies, Mermoz...">
+        </div>
+        <div class="form-group">
+            <label><i class="fa-solid fa-coins"></i> Budget Max (FCFA)</label>
+            <input type="number" name="max_price" value="{{ request.args.get('max_price', '') }}" placeholder="Ex: 250000">
+        </div>
+        <button type="submit" class="btn-search"><i class="fa-solid fa-magnifying-glass"></i> Filtrer</button>
+    </form>
+</div>
+
+<!-- Bannière active si géolocalisé -->
+{% if is_geolocated %}
+<div class="geo-banner">
+    <div class="geo-banner-left">
+        <i class="fa-solid fa-location-crosshairs" style="color: #38bdf8; font-size: 1.3rem;"></i>
+        <div>
+            <strong>📍 Recherche de proximité active :</strong> Logements classés par rapport à <strong>{{ user_loc_name if user_loc_name else 'votre position' }}</strong>.
+        </div>
+    </div>
+    <div class="geo-banner-actions">
+        <button type="button" class="btn-change-geo" id="btn-change-position">
+            <i class="fa-solid fa-pen"></i> Modifier ma position
+        </button>
+        <a href="/" class="btn-reset-geo" id="btn-clear-geo">
+            <i class="fa-solid fa-xmark"></i> Réinitialiser
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Barre de contrôle Carte / Liste -->
+<div class="map-toggle-bar">
+    <h3 style="font-size: 1.25rem; font-weight: 700; color: #f8fafc;">
+        {% if is_geolocated %}Logements à proximité{% else %}Dernières annonces{% endif %} ({{ properties|length }})
+    </h3>
+    <button type="button" id="btn-toggle-map" class="btn-toggle-map">
+        <i class="fa-solid fa-map-marked-alt"></i> <span id="map-toggle-text">Afficher la carte interactive</span>
+    </button>
+</div>
+
+<!-- Conteneur Carte interactive -->
+<div id="interactive-map-container">
+    <div id="interactive-map"></div>
+    <div class="map-hint">
+        <i class="fa-solid fa-hand-pointer" style="color: #38bdf8;"></i> Astuce : Cliquez n'importe où sur la carte pour définir instantanément votre position exacte et recalculer les distances !
+    </div>
+</div>
+
+<div class="grid">
+    {% for item in properties %}
+    <div class="card">
+        <div class="img-box">
+            <div class="badges">
+                <span class="badge badge-offer">{{ item.offer_type }}</span>
+                <span class="badge">{{ item.property_type }}</span>
+                {% if item.distance_text %}
+                <span class="badge badge-distance">
+                    <i class="fa-solid fa-person-walking"></i> à {{ item.distance_text }}
+                </span>
+                {% endif %}
+            </div>
+            <a href="/property/{{ item.id }}">
+                <img src="{{ image_url(item.image) }}" class="card-img" alt="{{ item.title }}">
+            </a>
+        </div>
+        <div class="card-body">
+            <h3 style="font-size: 1.15rem; font-weight: 700;">
+                <a href="/property/{{ item.id }}" style="color: #fff; text-decoration: none;">{{ item.title }}</a>
+            </h3>
+            <div class="price">{{ "{:,}".format(item.price) }} FCFA</div>
+            <p style="color: #94a3b8; font-size: 0.9rem;"><i class="fa-solid fa-location-dot" style="color: #ef4444;"></i> {{ item.neighborhood }} ({{ item.city }})</p>
+
+            <a class="btn-detail" href="/property/{{ item.id }}">Découvrir le bien <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+    </div>
+    {% else %}
+    <p style="color: #94a3b8; grid-column: 1/-1; text-align: center; padding: 40px;">Aucun bien disponible pour le moment.</p>
+    {% endfor %}
+</div>
+
+<!-- MODAL DE CHOIX DE POSITION PRÉCISE -->
+<div class="modal-overlay" id="geo-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-location-dot" style="color: #38bdf8;"></i> Définir votre position exacte</h3>
+            <button type="button" class="btn-close-modal" id="btn-close-geo-modal">&times;</button>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 0.9rem;">
+            Sur ordinateur, le GPS du navigateur peut être imprécis. Choisissez votre quartier ou tapez votre adresse pour une précision absolue :
+        </p>
+
+        <!-- Option 1 : Choix par Quartier de Dakar -->
+        <div class="location-option-title">
+            <i class="fa-solid fa-city"></i> 1. Choisissez votre quartier à Dakar (100% Précis) :
+        </div>
+        <div class="dakar-chips">
+            <button type="button" class="dakar-chip" data-lat="14.7442" data-lng="-17.5175" data-name="Almadies">📍 Almadies</button>
+            <button type="button" class="dakar-chip" data-lat="14.7550" data-lng="-17.5150" data-name="Ngor">📍 Ngor / Virage</button>
+            <button type="button" class="dakar-chip" data-lat="14.7230" data-lng="-17.4890" data-name="Ouakam">📍 Ouakam</button>
+            <button type="button" class="dakar-chip" data-lat="14.7074" data-lng="-17.4744" data-name="Mermoz">📍 Mermoz</button>
+            <button type="button" class="dakar-chip" data-lat="14.7140" data-lng="-17.4670" data-name="Sacré-Cœur">📍 Sacré-Cœur</button>
+            <button type="button" class="dakar-chip" data-lat="14.7220" data-lng="-17.4560" data-name="Liberté 6">📍 Liberté 6 / Sicap</button>
+            <button type="button" class="dakar-chip" data-lat="14.6930" data-lng="-17.4660" data-name="Point E">📍 Fann / Point E</button>
+            <button type="button" class="dakar-chip" data-lat="14.6710" data-lng="-17.4330" data-name="Plateau">📍 Plateau (Centre)</button>
+            <button type="button" class="dakar-chip" data-lat="14.6850" data-lng="-17.4470" data-name="Médina">📍 Médina</button>
+            <button type="button" class="dakar-chip" data-lat="14.7570" data-lng="-17.4670" data-name="Yoff">📍 Yoff</button>
+            <button type="button" class="dakar-chip" data-lat="14.7630" data-lng="-17.4370" data-name="Parcelles Assainies">📍 Parcelles Assainies</button>
+            <button type="button" class="dakar-chip" data-lat="14.7350" data-lng="-17.4480" data-name="Grand Yoff">📍 Grand Yoff</button>
+            <button type="button" class="dakar-chip" data-lat="14.7290" data-lng="-17.4310" data-name="Hann Maristes">📍 Hann Maristes</button>
+            <button type="button" class="dakar-chip" data-lat="14.7550" data-lng="-17.3950" data-name="Pikine">📍 Pikine</button>
+            <button type="button" class="dakar-chip" data-lat="14.7780" data-lng="-17.3870" data-name="Guédiawaye">📍 Guédiawaye</button>
+            <button type="button" class="dakar-chip" data-lat="14.7820" data-lng="-17.3110" data-name="Keur Massar">📍 Keur Massar</button>
+            <button type="button" class="dakar-chip" data-lat="14.7150" data-lng="-17.2720" data-name="Rufisque">📍 Rufisque</button>
+            <button type="button" class="dakar-chip" data-lat="14.7270" data-lng="-17.1850" data-name="Diamniadio">📍 Diamniadio</button>
+            <button type="button" class="dakar-chip" data-lat="14.4420" data-lng="-16.9850" data-name="Saly">📍 Saly / Mbour</button>
+        </div>
+
+        <!-- Option 2 : Recherche d'adresse ou repère -->
+        <div class="location-option-title">
+            <i class="fa-solid fa-search"></i> 2. Ou tapez votre rue ou repère à Dakar :
+        </div>
+        <div class="modal-search-box">
+            <input type="text" id="modal-address-input" placeholder="Ex: Sea Plaza, VDN, Rond-point Ngor, HLM...">
+            <button type="button" id="btn-modal-search-address" class="btn-modal-search">
+                <i class="fa-solid fa-arrow-right"></i> Valider
+            </button>
+        </div>
+
+        <!-- Option 3 : Détection GPS automatique (idéal smartphone) -->
+        <div class="location-option-title">
+            <i class="fa-solid fa-satellite"></i> 3. Ou détection par puce GPS :
+        </div>
+        <button type="button" id="btn-modal-auto-gps" class="btn-auto-gps">
+            <i class="fa-solid fa-crosshairs"></i> Activer le GPS du navigateur / mobile
+        </button>
+    </div>
+</div>
+
+<!-- Script Géolocalisation & Carte Leaflet interactive -->
+<script>
+    var propertyMarkers = [
+        {% for item in properties %}
+        {% if item.latitude and item.longitude %}
+        {
+            id: {{ item.id }},
+            title: {{ item.title|tojson }},
+            price: {{ ("{:,}".format(item.price))|tojson }},
+            neighborhood: {{ item.neighborhood|tojson }},
+            city: {{ item.city|tojson }},
+            lat: {{ item.latitude }},
+            lng: {{ item.longitude }},
+            image: {{ item.image|tojson }},
+            distance: {{ (item.distance_text)|tojson if item.distance_text else 'null' }}
+        },
+        {% endif %}
+        {% endfor %}
+    ];
+
+    var userLat = {{ user_lat if user_lat else 'null' }};
+    var userLng = {{ user_lng if user_lng else 'null' }};
+    var userLocName = {{ user_loc_name|tojson if user_loc_name else 'null' }};
+
+    // Modal de localisation
+    var geoModal = document.getElementById('geo-modal');
+    var btnHeroLocate = document.getElementById('btn-hero-locate');
+    var btnCloseGeoModal = document.getElementById('btn-close-geo-modal');
+    var btnChangePosition = document.getElementById('btn-change-position');
+
+    function openGeoModal() {
+        geoModal.style.display = 'flex';
+    }
+    function closeGeoModal() {
+        geoModal.style.display = 'none';
+    }
+
+    if (btnHeroLocate) btnHeroLocate.addEventListener('click', openGeoModal);
+    if (btnCloseGeoModal) btnCloseGeoModal.addEventListener('click', closeGeoModal);
+    if (btnChangePosition) btnChangePosition.addEventListener('click', openGeoModal);
+
+    window.addEventListener('click', function(e) {
+        if (e.target === geoModal) closeGeoModal();
+    });
+
+    // Appliquer une position précise
+    function applyLocation(lat, lng, locName) {
+        sessionStorage.setItem('user_lat', lat);
+        sessionStorage.setItem('user_lng', lng);
+        if (locName) sessionStorage.setItem('user_loc_name', locName);
+
+        var url = new URL(window.location.href);
+        url.searchParams.set('user_lat', lat);
+        url.searchParams.set('user_lng', lng);
+        if (locName) url.searchParams.set('user_loc_name', locName);
+        window.location.href = url.toString();
+    }
+
+    // Clic sur les badges quartiers
+    document.querySelectorAll('.dakar-chip').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            var lat = this.getAttribute('data-lat');
+            var lng = this.getAttribute('data-lng');
+            var name = this.getAttribute('data-name');
+            applyLocation(lat, lng, name);
+        });
+    });
+
+    // Recherche d'adresse dans le modal avec Nominatim
+    document.getElementById('btn-modal-search-address').addEventListener('click', runAddressSearch);
+    document.getElementById('modal-address-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            runAddressSearch();
+        }
+    });
+
+    function runAddressSearch() {
+        var input = document.getElementById('modal-address-input');
+        var query = input.value.trim();
+        if (!query) return;
+
+        var btn = document.getElementById('btn-modal-search-address');
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+        var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query + ' Dakar Senegal') + '&limit=1';
+
+        fetch(url, { headers: { 'Accept-Language': 'fr' } })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                btn.innerHTML = '<i class="fa-solid fa-arrow-right"></i> Valider';
+                if (data && data.length > 0) {
+                    var lat = parseFloat(data[0].lat);
+                    var lng = parseFloat(data[0].lon);
+                    applyLocation(lat, lng, query);
+                } else {
+                    alert("Aucun résultat pour cette recherche à Dakar. Essayez avec un quartier (ex: Almadies, Mermoz).");
+                }
+            })
+            .catch(function() {
+                btn.innerHTML = '<i class="fa-solid fa-arrow-right"></i> Valider';
+                alert("Erreur de connexion. Veuillez choisir un quartier dans la liste.");
+            });
+    }
+
+    // Détection automatique GPS
+    document.getElementById('btn-modal-auto-gps').addEventListener('click', function() {
+        var btn = this;
+        if (!navigator.geolocation) {
+            alert("Votre navigateur ne supporte pas la géolocalisation.");
+            return;
+        }
+
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connexion GPS en cours...';
+
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
+                applyLocation(lat, lng, 'GPS mobile');
+            },
+            function(error) {
+                btn.innerHTML = '<i class="fa-solid fa-crosshairs"></i> Activer le GPS du navigateur / mobile';
+                alert("Accès GPS non disponible ou refusé. Vous pouvez choisir directement votre quartier dans la liste ci-dessus.");
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+
+    // Nettoyage de la géolocalisation
+    var clearBtn = document.getElementById('btn-clear-geo');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            sessionStorage.removeItem('user_lat');
+            sessionStorage.removeItem('user_lng');
+            sessionStorage.removeItem('user_loc_name');
+        });
+    }
+
+    // Gestion de la carte interactive
+    var mapInitialized = false;
+    var leafletMap = null;
+    var mapContainer = document.getElementById('interactive-map-container');
+    var mapToggleBtn = document.getElementById('btn-toggle-map');
+    var mapToggleText = document.getElementById('map-toggle-text');
+    var userPinMarker = null;
+
+    function initMap() {
+        if (mapInitialized) return;
+
+        var centerLat = userLat ? userLat : 14.7167;
+        var centerLng = userLng ? userLng : -17.4677;
+
+        leafletMap = L.map('interactive-map').setView([centerLat, centerLng], userLat ? 13 : 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(leafletMap);
+
+        // Si l'utilisateur est géolocalisé, afficher son marqueur
+        if (userLat && userLng) {
+            var userIcon = L.divIcon({
+                className: 'user-marker',
+                html: '<div style="background:#0284c7; border:3px solid #fff; width:20px; height:20px; border-radius:50%; box-shadow:0 0 12px #38bdf8;"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            var userPopup = document.createElement('div');
+            var userPopupTitle = document.createElement('strong');
+            userPopupTitle.textContent = '📍 ' + (userLocName ? userLocName : 'Votre position');
+            userPopup.appendChild(userPopupTitle);
+            userPopup.appendChild(document.createElement('br'));
+            userPopup.append('Point de calcul des distances');
+
+            userPinMarker = L.marker([userLat, userLng], { icon: userIcon }).addTo(leafletMap)
+                .bindPopup(userPopup)
+                .openPopup();
+        }
+
+        // Marqueurs des biens immobiliers
+        propertyMarkers.forEach(function(item) {
+            var marker = L.marker([item.lat, item.lng]).addTo(leafletMap);
+            var popupContent = document.createElement('div');
+            popupContent.style.fontFamily = 'inherit';
+            popupContent.style.fontSize = '0.9rem';
+            popupContent.style.minWidth = '180px';
+
+            var title = document.createElement('strong');
+            title.style.color = '#0f172a';
+            title.textContent = item.title;
+            popupContent.appendChild(title);
+            popupContent.appendChild(document.createElement('br'));
+
+            var price = document.createElement('span');
+            price.style.color = '#0284c7';
+            price.style.fontWeight = 'bold';
+            price.textContent = item.price + ' FCFA';
+            popupContent.appendChild(price);
+            popupContent.appendChild(document.createElement('br'));
+
+            var location = document.createElement('span');
+            location.style.color = '#64748b';
+            location.style.fontSize = '0.8rem';
+            location.textContent = '📍 ' + item.neighborhood + ' (' + item.city + ')';
+            popupContent.appendChild(location);
+
+            if (item.distance) {
+                popupContent.appendChild(document.createElement('br'));
+                var distance = document.createElement('span');
+                distance.style.color = '#10b981';
+                distance.style.fontWeight = 'bold';
+                distance.style.fontSize = '0.8rem';
+                distance.textContent = '🚶 à ' + item.distance;
+                popupContent.appendChild(distance);
+            }
+
+            popupContent.appendChild(document.createElement('br'));
+            var detailsLink = document.createElement('a');
+            detailsLink.href = '/property/' + encodeURIComponent(item.id);
+            detailsLink.style.display = 'inline-block';
+            detailsLink.style.marginTop = '6px';
+            detailsLink.style.color = '#0284c7';
+            detailsLink.style.fontWeight = 'bold';
+            detailsLink.style.textDecoration = 'none';
+            detailsLink.textContent = "Voir l'annonce →";
+            popupContent.appendChild(detailsLink);
+
+            marker.bindPopup(popupContent);
+        });
+
+        // Clic sur la carte pour définir sa position n'importe où à Dakar
+        leafletMap.on('click', function(e) {
+            var clickedLat = e.latlng.lat;
+            var clickedLng = e.latlng.lng;
+
+            if (confirm("Voulez-vous définir votre position à cet endroit précis sur la carte pour recalculer les logements les plus proches ?")) {
+                applyLocation(clickedLat, clickedLng, 'Point sur la carte');
+            }
+        });
+
+        mapInitialized = true;
+    }
+
+    mapToggleBtn.addEventListener('click', function() {
+        if (mapContainer.style.display === 'block') {
+            mapContainer.style.display = 'none';
+            mapToggleText.textContent = 'Afficher la carte interactive';
+        } else {
+            mapContainer.style.display = 'block';
+            mapToggleText.textContent = 'Masquer la carte';
+            initMap();
+            setTimeout(function() {
+                leafletMap.invalidateSize();
+            }, 200);
+        }
+    });
+</script>
+{% endblock %}
