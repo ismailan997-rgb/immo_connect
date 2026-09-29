@@ -1,7 +1,9 @@
 import os
 import math
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+import hmac
+import secrets
+from flask import Flask, abort, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -30,7 +32,28 @@ def format_distance(dist_km):
     return f"{dist_km:.1f} km"
 
 app = Flask(__name__)
-app.secret_key = "immo_connect_cle_secrete_dakar_2026"
+app.secret_key = os.environ.get("IMMO_CONNECT_SECRET_KEY") or secrets.token_hex(32)
+
+
+@app.before_request
+def protect_post_requests():
+    if request.method == "POST":
+        expected_token = session.get("_csrf_token", "")
+        submitted_token = request.form.get("csrf_token", "")
+        if not expected_token or not submitted_token or not hmac.compare_digest(
+            submitted_token.encode("utf-8"), expected_token.encode("utf-8")
+        ):
+            abort(400)
+
+
+@app.context_processor
+def inject_csrf_token():
+    def csrf_token():
+        if "_csrf_token" not in session:
+            session["_csrf_token"] = secrets.token_hex(32)
+        return session["_csrf_token"]
+
+    return {"csrf_token": csrf_token}
 
 # Configuration du dossier pour stocker les photos des logements
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -111,18 +134,31 @@ init_db()
 # 2. Route pour soumettre un avis
 @app.route("/property/<int:property_id>/review", methods=["POST"])
 def add_review(property_id):
-    author_name = request.form.get("author_name")
-    rating = request.form.get("rating")
-    comment = request.form.get("comment")
+    author_name = (request.form.get("author_name") or "").strip()
+    rating_value = request.form.get("rating", "")
+    comment = (request.form.get("comment") or "").strip()
 
-    if not author_name or not rating or not comment:
+    if not author_name or not rating_value or not comment:
         flash("Veuillez remplir tous les champs de l'avis.", "danger")
         return redirect(url_for("property_detail", property_id=property_id))
 
+    try:
+        rating = int(rating_value)
+    except ValueError:
+        rating = 0
+    if not 1 <= rating <= 5:
+        flash("La note doit être comprise entre 1 et 5.", "danger")
+        return redirect(url_for("property_detail", property_id=property_id))
+
     conn = get_db_connection()
+    property_exists = conn.execute("SELECT 1 FROM properties WHERE id = ?", (property_id,)).fetchone()
+    if property_exists is None:
+        conn.close()
+        flash("Annonce introuvable.", "danger")
+        return redirect(url_for("home"))
     conn.execute(
         "INSERT INTO reviews (property_id, author_name, rating, comment) VALUES (?, ?, ?, ?)",
-        (property_id, author_name, int(rating), comment)
+        (property_id, author_name, rating, comment)
     )
     conn.commit()
     conn.close()
@@ -271,6 +307,7 @@ def login():
         conn.close()
 
         if user and check_password_hash(user["password"], password):
+            session.pop("_csrf_token", None)
             session["user_id"] = user["id"]
             session["agency_name"] = user["agency_name"]
             flash(f"Bienvenue, {user['agency_name']} !", "success")
@@ -280,7 +317,7 @@ def login():
 
     return render_template("login.html")
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     flash("Vous êtes déconnecté.", "info")
@@ -350,7 +387,7 @@ def add_property():
 
     return render_template("add_property.html")
 
-@app.route("/delete-property/<int:property_id>")
+@app.route("/delete-property/<int:property_id>", methods=["POST"])
 def delete_property(property_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
@@ -364,4 +401,4 @@ def delete_property(property_id):
     return redirect(url_for("dashboard"))
 if __name__ == "__main__":
     # Écoute sur 0.0.0.0 pour être accessible sur votre PC et vos appareils connectés au Wi-Fi
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
