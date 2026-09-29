@@ -21,7 +21,7 @@
 <div class="grid">
     {% for item in properties %}
     <div class="card">
-        <img src="{{ url_for('static', filename='uploads/' + item.image) }}" class="card-img" alt="{{ item.title }}">
+        <img src="{{ image_url(item.image) }}" class="card-img" alt="{{ item.title }}">
         <div class="card-body">
             <h4>{{ item.title }}</h4>
             <p style="color: #38bdf8; font-weight: bold; margin: 5px 0;">{{ "{:,}".format(item.price) }} FCFA</p>

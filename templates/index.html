@@ -415,7 +415,7 @@
                 {% endif %}
             </div>
             <a href="/property/{{ item.id }}">
-                <img src="{{ url_for('static', filename='uploads/' + item.image) }}" class="card-img" alt="{{ item.title }}">
+                <img src="{{ image_url(item.image) }}" class="card-img" alt="{{ item.title }}">
             </a>
         </div>
         <div class="card-body">
