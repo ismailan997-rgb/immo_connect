@@ -3,9 +3,12 @@ import math
 import hmac
 import secrets
 import psycopg
+import cloudinary
+import cloudinary.uploader
 from dotenv import load_dotenv
-from flask import Flask, abort, render_template, request, redirect, url_for, session, flash
+from flask import Flask, abort, current_app, render_template, request, redirect, url_for, session, flash
 from psycopg.rows import dict_row
+from cloudinary.exceptions import Error as CloudinaryError
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -40,6 +43,16 @@ app.secret_key = os.environ.get("IMMO_CONNECT_SECRET_KEY") or secrets.token_hex(
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+CLOUDINARY_SETTINGS = {
+    "cloud_name": os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip(),
+    "api_key": os.environ.get("CLOUDINARY_API_KEY", "").strip(),
+    "api_secret": os.environ.get("CLOUDINARY_API_SECRET", "").strip(),
+}
+CLOUDINARY_CONFIGURED = all(CLOUDINARY_SETTINGS.values())
+if any(CLOUDINARY_SETTINGS.values()) and not CLOUDINARY_CONFIGURED:
+    raise RuntimeError("Configurez les trois variables Cloudinary dans l'environnement.")
+if CLOUDINARY_CONFIGURED:
+    cloudinary.config(**CLOUDINARY_SETTINGS, secure=True)
 
 
 @app.before_request
@@ -60,12 +73,18 @@ def inject_csrf_token():
             session["_csrf_token"] = secrets.token_hex(32)
         return session["_csrf_token"]
 
-    return {"csrf_token": csrf_token}
+    def image_url(image):
+        if image.startswith(("http://", "https://")):
+            return image
+        return url_for("static", filename=f"uploads/{image}")
+
+    return {"csrf_token": csrf_token, "image_url": image_url}
 
 # Configuration du dossier pour stocker les photos des logements
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -365,11 +384,28 @@ def add_property():
         file = request.files.get("image")
         image_filename = "default_house.jpg"
 
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            saved_filename = f"{session['user_id']}_{filename}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-            image_filename = saved_filename
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                flash("Format d'image non pris en charge. Utilisez PNG, JPG, JPEG ou WebP.", "danger")
+                return redirect(url_for("add_property"))
+
+            if CLOUDINARY_CONFIGURED:
+                try:
+                    upload_result = cloudinary.uploader.upload(
+                        file,
+                        folder="immo-connect/properties",
+                        resource_type="image",
+                    )
+                except CloudinaryError:
+                    current_app.logger.exception("Échec de l'envoi de l'image vers Cloudinary")
+                    flash("L'envoi de la photo a échoué. Réessayez dans un instant.", "danger")
+                    return redirect(url_for("add_property"))
+                image_filename = upload_result["secure_url"]
+            else:
+                filename = secure_filename(file.filename)
+                saved_filename = f"{session['user_id']}_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                image_filename = saved_filename
 
         latitude = request.form.get("latitude")
         longitude = request.form.get("longitude")
